@@ -1,0 +1,304 @@
+package main
+
+import (
+	"fmt"
+	"math"
+	"strconv"
+	"strings"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/lucasb-eyer/go-colorful"
+)
+
+const (
+	progressBarWidth  = 71
+	progressFullChar  = "█"
+	progressEmptyChar = "░"
+	dotChar           = " • "
+)
+
+// General stuff for styling the view
+var (
+	keywordStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("211"))
+	subtleStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	ticksStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("79"))
+	checkboxStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("212"))
+	progressEmpty = subtleStyle.Render(progressEmptyChar)
+	dotStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("236")).Render(dotChar)
+	mainStyle     = lipgloss.NewStyle().MarginLeft(2)
+
+	// Gradient colors we'll use for the progress bar
+	ramp = makeRampStyles("#B14FFF", "#00FFA3", progressBarWidth)
+)
+
+type (
+	tickMsg  struct{}
+	frameMsg struct{}
+)
+
+func tick() tea.Cmd {
+	return tea.Tick(time.Second, func(time.Time) tea.Msg {
+		return tickMsg{}
+	})
+}
+
+func frame() tea.Cmd {
+	return tea.Tick(time.Second/60, func(time.Time) tea.Msg {
+		return frameMsg{}
+	})
+}
+
+func main() {
+	initialModel := model{0, false, 0, false, false, false, 10, 0, 0, false, false}
+	p := tea.NewProgram(initialModel)
+	if _, err := p.Run(); err != nil {
+		fmt.Println("could not start program:", err)
+	}
+}
+
+type model struct {
+	StartInstallationChoice int
+	StartInstallationChosen bool
+	LicenseAcceptChoice     int
+	LicenseAcceptChosen     bool
+	IsInstallationComplete  bool
+	ExitSetup               bool
+	Ticks                   int
+	Frames                  int
+	Progress                float64
+	Loaded                  bool
+	Quiting                 bool
+}
+
+func (m model) Init() tea.Cmd { return tick() }
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if msg, ok := msg.(tea.KeyMsg); ok {
+		k := msg.String()
+		switch k {
+		case "ctrl+c", "q", "esc":
+			m.Quiting = true
+			return m, tea.Quit
+		}
+	}
+
+	if !m.StartInstallationChosen {
+		return updateStartInstallationChoices(msg, m)
+	} else if !m.LicenseAcceptChosen {
+		return updateLicenseAcceptChoices(msg, m)
+	} else if !m.IsInstallationComplete {
+		return updateInstallation(msg, m)
+	} else {
+		return updateAfterInstallation(msg, m)
+	}
+}
+
+func (m model) View() string {
+	var s string
+	if m.Quiting {
+		return "\n  Exiting setup wizard\n\n"
+	}
+	if !m.StartInstallationChosen {
+		s = StartInstallationView(m)
+	} else if !m.LicenseAcceptChosen {
+		s = LicenseAcceptView(m)
+	} else if !m.IsInstallationComplete {
+		s = InstallationView(m)
+	} else {
+		s = AfterInstallationView(m)
+	}
+	return mainStyle.Render("\n" + s + "\n\n")
+}
+
+func updateStartInstallationChoices(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "j", "down":
+			m.StartInstallationChoice++
+			if m.StartInstallationChoice > 1 {
+				m.StartInstallationChoice = 1
+			}
+		case "k", "up":
+			m.StartInstallationChoice--
+			if m.StartInstallationChoice < 0 {
+				m.StartInstallationChoice = 0
+			}
+		case "enter":
+			m.StartInstallationChosen = true
+			if m.StartInstallationChoice == 1 {
+				m.Quiting = true
+				return m, tea.Quit
+			}
+			return m, frame()
+		}
+	case tickMsg:
+		if m.Ticks == 0 {
+			m.Quiting = true
+			return m, tea.Quit
+		}
+		m.Ticks--
+		return m, tick()
+	}
+
+	return m, nil
+}
+
+func updateLicenseAcceptChoices(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "j", "down":
+			m.LicenseAcceptChoice++
+			if m.LicenseAcceptChoice > 1 {
+				m.LicenseAcceptChoice = 1
+			}
+		case "k", "up":
+			m.LicenseAcceptChoice--
+			if m.LicenseAcceptChoice < 0 {
+				m.LicenseAcceptChoice = 0
+			}
+		case "enter":
+			m.LicenseAcceptChosen = true
+			if m.StartInstallationChoice == 1 {
+				m.Quiting = true
+				return m, tea.Quit
+			}
+			return m, frame()
+		}
+	}
+	return m, nil
+}
+
+func updateInstallation(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
+	switch msg.(type) {
+	case frameMsg:
+		if !m.Loaded {
+			// Placeholder for installation progress: To be changed.
+			m.Frames++
+			m.Progress = float64(m.Frames) / float64(100)
+			if m.Progress >= 1 {
+				m.Progress = 1
+				m.Loaded = true
+				m.Ticks = 3
+				return m, tick()
+			}
+			return m, frame()
+		}
+	}
+	return m, nil
+}
+
+func updateAfterInstallation(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "enter":
+			return m, tea.Quit
+		}
+	}
+	return m, nil
+}
+
+func StartInstallationView(m model) string {
+	c := m.StartInstallationChoice
+	tpl := "Welcome to TermInstaller!\n\n"
+	tpl += "%s\n\n"
+	tpl += "Setup wizard quits in %s seconds\n\n"
+	tpl += subtleStyle.Render("j/k, up/down: select") + dotStyle +
+		subtleStyle.Render("enter: choose") + dotStyle +
+		subtleStyle.Render("q, esc: quit")
+
+	choices := fmt.Sprintf(
+		"%s\n%s",
+		checkbox("Next", c == 0),
+		checkbox("Quit setup wizard", c == 1),
+	)
+	return fmt.Sprintf(tpl, choices, ticksStyle.Render(strconv.Itoa(m.Ticks)))
+}
+
+func LicenseAcceptView(m model) string {
+	c := m.LicenseAcceptChoice
+	tpl := "You need to accept license to install.\n\n"
+	tpl += "%s\n\n"
+	tpl += subtleStyle.Render("j/k, up/down: select") + dotStyle +
+		subtleStyle.Render("enter: choose") + dotStyle +
+		subtleStyle.Render("q, esc: quit")
+
+	choices := fmt.Sprintf(
+		"%s\n%s",
+		checkbox("Yes, I accept the license", c == 0),
+		checkbox("No, I don't accept the license", c == 1),
+	)
+	return fmt.Sprintf(tpl, choices, ticksStyle.Render(strconv.Itoa(m.Ticks)))
+}
+
+func InstallationView(m model) string {
+	var msg string
+	msg = "Please wait while setup is installing software to your system..."
+	label := "Installing..."
+	if m.Loaded {
+		label = fmt.Sprintf("Installed.")
+		m.IsInstallationComplete = true
+	}
+
+	return msg + "\n\n" + label + "\n" + progressbar(m.Progress) + "%"
+}
+
+func AfterInstallationView(m model) string {
+	msg := "Installation complete!\n\n"
+	return msg + subtleStyle.Render("Press enter to exit wizard.")
+}
+
+func checkbox(label string, checked bool) string {
+	if checked {
+		return checkboxStyle.Render("[x] " + label)
+	}
+	return fmt.Sprintf("[ ] %s", label)
+}
+
+func progressbar(percent float64) string {
+	w := float64(progressBarWidth)
+
+	fullSize := int(math.Round(w * percent))
+	var fullCells string
+	for i := 0; i < fullSize; i++ {
+		fullCells += ramp[i].Render(progressFullChar)
+	}
+
+	emptySize := int(w) - fullSize
+	emptyCells := strings.Repeat(progressEmpty, emptySize)
+
+	return fmt.Sprintf("%s%s %3.0f", fullCells, emptyCells, math.Round(percent*100))
+}
+
+// Utils
+
+// Generate a blend of colors.
+func makeRampStyles(colorA, colorB string, steps float64) (s []lipgloss.Style) {
+	cA, _ := colorful.Hex(colorA)
+	cB, _ := colorful.Hex(colorB)
+
+	for i := 0.0; i < steps; i++ {
+		c := cA.BlendLuv(cB, i/steps)
+		s = append(s, lipgloss.NewStyle().Foreground(lipgloss.Color(colorToHex(c))))
+	}
+	return
+}
+
+// Convert a colorful.Color to a hexadecimal format.
+func colorToHex(c colorful.Color) string {
+	return fmt.Sprintf("#%s%s%s", colorFloatToHex(c.R), colorFloatToHex(c.G), colorFloatToHex(c.B))
+}
+
+// Helper function for converting colors to hex. Assumes a value between 0 and
+// 1.
+func colorFloatToHex(f float64) (s string) {
+	s = strconv.FormatInt(int64(f*255), 16)
+	if len(s) == 1 {
+		s = "0" + s
+	}
+	return
+}
