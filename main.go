@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -51,7 +52,7 @@ func frame() tea.Cmd {
 }
 
 func main() {
-	initialModel := model{0, 0, false, 0, 10, 0, 0, false, false}
+	initialModel := model{0, 0, false, 0, 10, 0, 0, false, false, nil, false}
 	p := tea.NewProgram(initialModel)
 	if _, err := p.Run(); err != nil {
 		fmt.Println("could not start program:", err)
@@ -66,7 +67,9 @@ type model struct {
 	Ticks                   int
 	Frames                  int
 	Progress                float64
-	Loaded                  bool
+	InstallStarted          bool
+	Installed               bool
+	InstallationError       error
 	Quiting                 bool
 }
 
@@ -178,15 +181,25 @@ func updateLicenseAcceptChoices(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 }
 
 func updateInstallation(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
+	if !m.InstallStarted {
+		err := Install()
+		m.InstallStarted = true
+		if err != nil {
+			m.InstallationError = err
+		}
+	}
+	if m.InstallationError != nil {
+		m.CurrentView++
+	}
 	switch msg.(type) {
 	case frameMsg:
-		if !m.Loaded {
+		if !m.Installed {
 			// Placeholder for installation progress: To be changed.
 			m.Frames++
 			m.Progress = float64(m.Frames) / float64(100)
 			if m.Progress >= 1 {
 				m.Progress = 1
-				m.Loaded = true
+				m.Installed = true
 				m.CurrentView++
 				return m, nil
 			}
@@ -244,7 +257,7 @@ func InstallationView(m model) string {
 	var msg string
 	msg = "Please wait while setup is installing software to your system..."
 	label := "Installing..."
-	if m.Loaded {
+	if m.Installed {
 		label = fmt.Sprintf("Done.")
 	}
 
@@ -252,8 +265,23 @@ func InstallationView(m model) string {
 }
 
 func AfterInstallationView(m model) string {
-	msg := "Installation complete!\n\n"
-	return msg + subtleStyle.Render("Press enter to exit wizard.")
+	var msg string
+	switch m.InstallationError {
+	case nil:
+		msg = "Installation complete!\n\n"
+	default:
+		msg = "Error during installation: " + keywordStyle.Render(m.InstallationError.Error()) + "\n\n"
+		msg += "Installation is canceled!\n\n"
+	}
+	return msg + "Press " + keywordStyle.Render("enter") + " to exit wizard."
+}
+
+func Install() error {
+	if false {
+		return errors.New("Installation failed!!!")
+	} else {
+		return nil
+	}
 }
 
 func checkbox(label string, checked bool) string {
