@@ -51,7 +51,7 @@ func frame() tea.Cmd {
 }
 
 func main() {
-	initialModel := model{0, false, 0, false, false, false, 0, 10, 0, 0, false, false}
+	initialModel := model{0, 0, false, 0, 10, 0, 0, false, false}
 	p := tea.NewProgram(initialModel)
 	if _, err := p.Run(); err != nil {
 		fmt.Println("could not start program:", err)
@@ -60,10 +60,7 @@ func main() {
 
 type model struct {
 	StartInstallationChoice int
-	StartInstallationChosen bool
 	LicenseAcceptChoice     int
-	LicenseAcceptChosen     bool
-	IsInstallationComplete  bool
 	ExitSetup               bool
 	CurrentView             int
 	Ticks                   int
@@ -90,13 +87,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 
-	if !m.StartInstallationChosen {
+	switch m.CurrentView {
+	case 0:
 		return updateStartInstallationChoices(msg, m)
-	} else if !m.LicenseAcceptChosen {
+	case 1:
 		return updateLicenseAcceptChoices(msg, m)
-	} else if !m.IsInstallationComplete {
+	case 2:
 		return updateInstallation(msg, m)
-	} else {
+	default:
 		return updateAfterInstallation(msg, m)
 	}
 }
@@ -106,13 +104,15 @@ func (m model) View() string {
 	if m.Quiting {
 		return "\n  Exiting setup wizard\n\n"
 	}
-	if !m.StartInstallationChosen {
+
+	switch m.CurrentView {
+	case 0:
 		s = StartInstallationView(m)
-	} else if !m.LicenseAcceptChosen {
+	case 1:
 		s = LicenseAcceptView(m)
-	} else if !m.IsInstallationComplete {
+	case 2:
 		s = InstallationView(m)
-	} else {
+	default:
 		s = AfterInstallationView(m)
 	}
 	return mainStyle.Render("\n" + s + "\n\n")
@@ -137,7 +137,6 @@ func updateStartInstallationChoices(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 				m.Quiting = true
 				return m, tea.Quit
 			}
-			m.StartInstallationChosen = true
 			m.CurrentView++
 			return m, frame()
 		}
@@ -171,7 +170,6 @@ func updateLicenseAcceptChoices(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 			if m.LicenseAcceptChoice == 1 {
 				m.ExitSetup = true
 			}
-			m.LicenseAcceptChosen = true
 			m.CurrentView++
 			return m, frame()
 		}
@@ -189,7 +187,7 @@ func updateInstallation(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 			if m.Progress >= 1 {
 				m.Progress = 1
 				m.Loaded = true
-				m.IsInstallationComplete = true
+				m.CurrentView++
 				return m, nil
 			}
 			return m, frame()
