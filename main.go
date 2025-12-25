@@ -51,7 +51,7 @@ func frame() tea.Cmd {
 }
 
 func main() {
-	initialModel := model{0, false, 0, false, false, false, 10, 0, 0, false, false}
+	initialModel := model{0, false, 0, false, false, false, 0, 10, 0, 0, false, false}
 	p := tea.NewProgram(initialModel)
 	if _, err := p.Run(); err != nil {
 		fmt.Println("could not start program:", err)
@@ -65,6 +65,7 @@ type model struct {
 	LicenseAcceptChosen     bool
 	IsInstallationComplete  bool
 	ExitSetup               bool
+	CurrentView             int
 	Ticks                   int
 	Frames                  int
 	Progress                float64
@@ -82,6 +83,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Quiting = true
 			return m, tea.Quit
 		}
+	}
+
+	if m.ExitSetup {
+		m.Quiting = true
+		return m, tea.Quit
 	}
 
 	if !m.StartInstallationChosen {
@@ -127,11 +133,12 @@ func updateStartInstallationChoices(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 				m.StartInstallationChoice = 0
 			}
 		case "enter":
-			m.StartInstallationChosen = true
 			if m.StartInstallationChoice == 1 {
 				m.Quiting = true
 				return m, tea.Quit
 			}
+			m.StartInstallationChosen = true
+			m.CurrentView++
 			return m, frame()
 		}
 	case tickMsg:
@@ -161,11 +168,11 @@ func updateLicenseAcceptChoices(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 				m.LicenseAcceptChoice = 0
 			}
 		case "enter":
-			m.LicenseAcceptChosen = true
-			if m.StartInstallationChoice == 1 {
-				m.Quiting = true
-				return m, tea.Quit
+			if m.LicenseAcceptChoice == 1 {
+				m.ExitSetup = true
 			}
+			m.LicenseAcceptChosen = true
+			m.CurrentView++
 			return m, frame()
 		}
 	}
@@ -182,8 +189,8 @@ func updateInstallation(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 			if m.Progress >= 1 {
 				m.Progress = 1
 				m.Loaded = true
-				m.Ticks = 3
-				return m, tick()
+				m.IsInstallationComplete = true
+				return m, nil
 			}
 			return m, frame()
 		}
@@ -232,7 +239,7 @@ func LicenseAcceptView(m model) string {
 		checkbox("Yes, I accept the license", c == 0),
 		checkbox("No, I don't accept the license", c == 1),
 	)
-	return fmt.Sprintf(tpl, choices, ticksStyle.Render(strconv.Itoa(m.Ticks)))
+	return fmt.Sprintf(tpl, choices)
 }
 
 func InstallationView(m model) string {
@@ -240,8 +247,7 @@ func InstallationView(m model) string {
 	msg = "Please wait while setup is installing software to your system..."
 	label := "Installing..."
 	if m.Loaded {
-		label = fmt.Sprintf("Installed.")
-		m.IsInstallationComplete = true
+		label = fmt.Sprintf("Done.")
 	}
 
 	return msg + "\n\n" + label + "\n" + progressbar(m.Progress) + "%"
