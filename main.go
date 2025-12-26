@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/lucasb-eyer/go-colorful"
@@ -30,7 +32,12 @@ var (
 	mainStyle     = lipgloss.NewStyle().MarginLeft(2)
 
 	// Gradient colors we'll use for the progress bar
-	ramp = makeRampStyles("#B14FFF", "#00FFA3", progressBarWidth)
+	ramp                   = makeRampStyles("#B14FFF", "#00FFA3", progressBarWidth)
+	stateStartInstallation = 0
+	stateLicenseAccept     = 1
+	stateInstallation      = 2
+	stateAfterInstallation = 3
+	stateLicenseView       = 4
 )
 
 type (
@@ -51,7 +58,11 @@ func frame() tea.Cmd {
 }
 
 func main() {
-	initialModel := model{0, 0, false, 0, 10, 0, 0, false, false, nil, false}
+	licenseViewport, err := setLicenseViewport()
+	if err != nil {
+		log.Fatal(err)
+	}
+	initialModel := model{0, 0, licenseViewport, false, stateStartInstallation, 10, 0, 0, false, false, nil, false}
 	p := tea.NewProgram(initialModel)
 	if _, err := p.Run(); err != nil {
 		fmt.Println("could not start program:", err)
@@ -61,6 +72,7 @@ func main() {
 type model struct {
 	StartInstallationChoice int
 	LicenseAcceptChoice     int
+	Viewport                viewport.Model
 	ExitSetup               bool
 	CurrentView             int
 	Ticks                   int
@@ -79,8 +91,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		k := msg.String()
 		switch k {
 		case "ctrl+c", "q", "esc":
-			m.Quiting = true
-			return m, tea.Quit
+			if m.CurrentView != stateLicenseView {
+				m.Quiting = true
+				return m, tea.Quit
+			}
 		}
 	}
 
@@ -96,6 +110,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return updateLicenseAcceptChoices(msg, m)
 	case 2:
 		return updateInstallation(msg, m)
+	case 3:
+		return updateAfterInstallation(msg, m)
+	case 4:
+		return updateLicenseView(msg, m)
 	default:
 		return updateAfterInstallation(msg, m)
 	}
@@ -114,6 +132,10 @@ func (m model) View() string {
 		s = LicenseAcceptView(m)
 	case 2:
 		s = InstallationView(m)
+	case 3:
+		s = AfterInstallationView(m)
+	case 4:
+		s = LicenseView(m)
 	default:
 		s = AfterInstallationView(m)
 	}

@@ -26,7 +26,7 @@ func updateStartInstallationChoices(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 				m.Quiting = true
 				return m, tea.Quit
 			}
-			m.CurrentView++
+			m.CurrentView = stateLicenseAccept
 			return m, frame()
 		}
 	case tickMsg:

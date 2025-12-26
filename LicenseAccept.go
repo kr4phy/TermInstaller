@@ -20,11 +20,13 @@ func updateLicenseAcceptChoices(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 			if m.LicenseAcceptChoice < 0 {
 				m.LicenseAcceptChoice = 0
 			}
+		case "l":
+			m.CurrentView = stateLicenseView
 		case "enter":
 			if m.LicenseAcceptChoice == 1 {
 				m.ExitSetup = true
 			}
-			m.CurrentView++
+			m.CurrentView = stateInstallation
 			return m, frame()
 		}
 	}
@@ -34,6 +36,7 @@ func updateLicenseAcceptChoices(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 func LicenseAcceptView(m model) string {
 	c := m.LicenseAcceptChoice
 	tpl := "You need to accept license to install.\n\n"
+	tpl += "Press " + keywordStyle.Render("l") + " to see license.\n\n"
 	tpl += "%s\n\n"
 	tpl += subtleStyle.Render("j/k, up/down: select") + dotStyle +
 		subtleStyle.Render("enter: choose") + dotStyle +

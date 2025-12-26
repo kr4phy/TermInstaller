@@ -26,7 +26,7 @@ func updateInstallation(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 			if m.Progress >= 1 {
 				m.Progress = 1
 				m.Installed = true
-				m.CurrentView++
+				m.CurrentView = stateAfterInstallation
 				return m, nil
 			}
 			return m, frame()
