@@ -23,6 +23,10 @@ const (
 
 // General stuff for styling the view
 var (
+	windowStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("62")).
+			Padding(0, 1)
 	keywordStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("211"))
 	subtleStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
 	ticksStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("79"))
@@ -58,11 +62,7 @@ func frame() tea.Cmd {
 }
 
 func main() {
-	licenseViewport, err := setLicenseViewport()
-	if err != nil {
-		log.Fatal(err)
-	}
-	initialModel := model{0, 0, licenseViewport, false, stateStartInstallation, 10, 0, 0, false, false, nil, false}
+	initialModel := model{0, 0, 0, 0, viewport.New(0, 0), false, stateStartInstallation, 10, 0, 0, false, false, nil, false}
 	p := tea.NewProgram(initialModel)
 	if _, err := p.Run(); err != nil {
 		fmt.Println("could not start program:", err)
@@ -70,9 +70,11 @@ func main() {
 }
 
 type model struct {
+	vpWidth                 int
+	vpHeight                int
 	StartInstallationChoice int
 	LicenseAcceptChoice     int
-	Viewport                viewport.Model
+	LicenseViewport         viewport.Model
 	ExitSetup               bool
 	CurrentView             int
 	Ticks                   int
@@ -87,9 +89,17 @@ type model struct {
 func (m model) Init() tea.Cmd { return tick() }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if msg, ok := msg.(tea.KeyMsg); ok {
-		k := msg.String()
-		switch k {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.vpWidth = msg.Width
+		m.vpHeight = msg.Height
+		licenseViewport, err := setLicenseViewport(m)
+		if err != nil {
+			log.Fatal(err)
+		}
+		m.LicenseViewport = licenseViewport
+	case tea.KeyMsg:
+		switch msg.String() {
 		case "ctrl+c", "q", "esc":
 			if m.CurrentView != stateLicenseView {
 				m.Quiting = true
@@ -139,7 +149,16 @@ func (m model) View() string {
 	default:
 		s = AfterInstallationView(m)
 	}
-	return mainStyle.Render("\n" + s + "\n\n")
+	wh, wv := windowStyle.GetFrameSize()
+	mh, mv := mainStyle.GetFrameSize()
+	s = lipgloss.Place(
+		m.vpWidth-wh-mh,
+		m.vpHeight-wv-mv,
+		lipgloss.Center,
+		lipgloss.Center,
+		s,
+	)
+	return windowStyle.Render(mainStyle.Render(s))
 }
 
 func checkbox(label string, checked bool) string {

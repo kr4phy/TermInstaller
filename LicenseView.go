@@ -12,25 +12,28 @@ import (
 //go:embed resources/LICENSE.md
 var content string
 
-func setLicenseViewport() (viewport.Model, error) {
-	const width = 78
-
-	vp := viewport.New(width, 8)
+func setLicenseViewport(m model) (viewport.Model, error) {
+	wh, wv := windowStyle.GetFrameSize()
+	mh, mv := mainStyle.GetFrameSize()
+	helpHeight := lipgloss.Height(helpView())
+	vp := viewport.New(m.vpWidth-wh-mh, m.vpHeight-wv-mv-helpHeight)
 	vp.Style = lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("62")).
-		PaddingRight(2)
+		Padding(0, 1)
+	vp.Width -= vp.Style.GetHorizontalFrameSize()
+	vp.Height -= vp.Style.GetVerticalFrameSize()
 
 	// We need to adjust the width of the glamour render from our main width
 	// to account for a few things:
 	//
-	//  * The Viewport border width
-	//  * The Viewport padding
-	//  * The Viewport margins
+	//  * The LicenseViewport border width
+	//  * The LicenseViewport padding
+	//  * The LicenseViewport margins
 	//  * The gutter glamour applies to the left side of the content
 	//
-	const glamourGutter = 2
-	glamourRenderWidth := width - vp.Style.GetHorizontalFrameSize() - glamourGutter
+	const glamourGutter = 4
+	glamourRenderWidth := m.vpWidth - wh - mh - vp.Style.GetHorizontalFrameSize() - glamourGutter
 
 	renderer, err := glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),
@@ -82,7 +85,7 @@ func updateLicenseView(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 			return m, nil
 		default:
 			var cmd tea.Cmd
-			m.Viewport, cmd = m.Viewport.Update(msg)
+			m.LicenseViewport, cmd = m.LicenseViewport.Update(msg)
 			return m, cmd
 		}
 	default:
@@ -91,23 +94,9 @@ func updateLicenseView(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 }
 
 func LicenseView(m model) string {
-	return m.Viewport.View() + helpView()
+	return m.LicenseViewport.View() + helpView()
 }
 
 func helpView() string {
 	return subtleStyle.Render("\n  ↑/↓: Navigate • q: Quit\n")
 }
-
-//
-//func main() {
-//	model, err := newLicenseViewport()
-//	if err != nil {
-//		fmt.Println("Could not initialize Bubble Tea model:", err)
-//		os.Exit(1)
-//	}
-//
-//	if _, err := tea.NewProgram(model).Run(); err != nil {
-//		fmt.Println("Bummer, there's been an error:", err)
-//		os.Exit(1)
-//	}
-//}
