@@ -7,6 +7,7 @@ func updateAfterInstallation(msg tea.Msg, m model) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "enter":
+			m.Quiting = true
 			return m, tea.Quit
 		}
 	}
